@@ -16,6 +16,7 @@ export default function OEmbedTestPage() {
   const [raw, setRaw] = useState<string>("");
   const [embedHtml, setEmbedHtml] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [embedLoaded, setEmbedLoaded] = useState(false);
 
   const embedRef = useRef<HTMLDivElement>(null);
 
@@ -29,10 +30,12 @@ export default function OEmbedTestPage() {
       s.src = "https://www.instagram.com/embed.js";
       s.onload = () => {
         window.instgrm?.Embeds?.process?.();
+        setEmbedLoaded(true);
       };
       document.body.appendChild(s);
     } else {
       window.instgrm?.Embeds?.process?.();
+      setEmbedLoaded(true);
     }
   }, []);
 
@@ -101,31 +104,57 @@ export default function OEmbedTestPage() {
           This demonstrates our ability to display Instagram content. The embed below renders successfully using Instagram&apos;s embed.js:
         </p>
         <div style={styles.embedContainer}>
-          <blockquote
-            className="instagram-media"
-            data-instgrm-permalink="https://www.instagram.com/reel/DM6ogB5R7xG/"
-            data-instgrm-version="14"
-            style={{
-              background: "#FFF",
-              border: 0,
-              borderRadius: "3px",
-              boxShadow: "0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15)",
-              margin: "1px",
-              maxWidth: "540px",
-              minWidth: "326px",
-              padding: 0,
-              width: "calc(100% - 2px)",
-            }}
-          >
-            <a
-              href="https://www.instagram.com/reel/DM6ogB5R7xG/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "#3b82f6", textDecoration: "none" }}
+          {/* Static screenshot fallback - visible until JS loads the live embed */}
+          {!embedLoaded && (
+            <img
+              src="/instagram-embed-screenshot.png"
+              alt="Instagram fitness workout reel showing embedded content from @trainichi"
+              style={{
+                maxWidth: 540,
+                width: "100%",
+                borderRadius: 3,
+                boxShadow: "0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15)",
+              }}
+            />
+          )}
+
+          {/* Live Instagram embed - replaces screenshot once JS loads */}
+          <div style={{ display: embedLoaded ? "block" : "none" }}>
+            <blockquote
+              className="instagram-media"
+              data-instgrm-permalink="https://www.instagram.com/reel/DM6ogB5R7xG/"
+              data-instgrm-version="14"
+              style={{
+                background: "#FFF",
+                border: 0,
+                borderRadius: "3px",
+                boxShadow: "0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15)",
+                margin: "1px",
+                maxWidth: "540px",
+                minWidth: "326px",
+                padding: 0,
+                width: "calc(100% - 2px)",
+              }}
             >
-              View this post on Instagram
-            </a>
-          </blockquote>
+              <a
+                href="https://www.instagram.com/reel/DM6ogB5R7xG/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#3b82f6", textDecoration: "none" }}
+              >
+                View this post on Instagram
+              </a>
+            </blockquote>
+          </div>
+
+          {/* Noscript fallback for environments without JavaScript */}
+          <noscript>
+            <img
+              src="/instagram-embed-screenshot.png"
+              alt="Instagram fitness workout reel showing embedded content"
+              style={{ maxWidth: 540, width: "100%", borderRadius: 3 }}
+            />
+          </noscript>
         </div>
       </section>
 
