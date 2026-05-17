@@ -1,19 +1,48 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Playfair_Display, Inter } from "next/font/google";
+import { DM_Sans, Fraunces } from "next/font/google";
 
-const serif = Playfair_Display({ subsets: ["latin"], variable: "--font-serif" });
-const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
+// "latin-ext" is required for the macron in "Aretē" (ē, U+0113).
+const sans = DM_Sans({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+});
+const serif = Fraunces({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-serif",
+});
 
 export const metadata: Metadata = {
-  title: "Trainichi",
-  description: "Train smarter with a cinematic training companion.",
+  metadataBase: new URL("https://trainichi.app"),
+  title: "Aretē — Strength & climbing training for women",
+  description:
+    "Strength and climbing training, built for how women's bodies actually work.",
+  openGraph: {
+    title: "Aretē — Strength & climbing training for women",
+    description:
+      "Strength and climbing training, built for how women's bodies actually work.",
+    url: "https://trainichi.app",
+    siteName: "Aretē",
+    type: "website",
+  },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable} bg-black text-white`}>
-      <body className="min-h-screen bg-black font-sans antialiased">{children}</body>
+    <html
+      lang="en"
+      className={`${sans.variable} ${serif.variable} bg-cream-bg text-cream-ink`}
+    >
+      <body className="min-h-screen bg-cream-bg font-sans antialiased">
+        {children}
+      </body>
     </html>
   );
 }

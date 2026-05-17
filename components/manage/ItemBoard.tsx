@@ -1,0 +1,383 @@
+"use client";
+
+import { useState } from "react";
+import {
+  ITEM_PRIORITIES,
+  ITEM_STATUSES,
+  type ItemPriority,
+  type ItemStatus,
+} from "@/lib/constants";
+import { StatusBadge } from "./StatusBadge";
+import { PriorityBadge } from "./PriorityBadge";
+
+export type BoardItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: ItemStatus;
+  priority: ItemPriority;
+  priority_group?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const PRIORITY_RANK: Record<ItemPriority, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+const STATUS_ORDER: ItemStatus[] = ["in_progress", "queued", "done"];
+const STATUS_LABEL: Record<ItemStatus, string> = {
+  queued: "Queued",
+  in_progress: "In progress",
+  done: "Done",
+};
+
+const inputClass =
+  "w-full rounded-[10px] border border-cream-border bg-cream-surface px-3 py-2 text-sm text-cream-ink outline-none transition focus:border-cream-accent-pressed";
+
+export function ItemBoard({
+  resource,
+  initialItems,
+  showPriorityGroup,
+}: {
+  resource: "improvements" | "todos";
+  initialItems: BoardItem[];
+  showPriorityGroup: boolean;
+}) {
+  const [items, setItems] = useState<BoardItem[]>(initialItems);
+  const [error, setError] = useState<string | null>(null);
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<ItemPriority>("medium");
+  const [priorityGroup, setPriorityGroup] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  async function api(path: string, method: string, body?: unknown) {
+    const res = await fetch(`/api/admin/${resource}${path}`, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "Request failed");
+    return data;
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const payload: Record<string, unknown> = {
+        title: title.trim(),
+        description: description.trim() || null,
+        priority,
+      };
+      if (showPriorityGroup) {
+        payload.priority_group = priorityGroup.trim() || null;
+      }
+      const { item } = await api("", "POST", payload);
+      setItems((prev) => [item, ...prev]);
+      setTitle("");
+      setDescription("");
+      setPriority("medium");
+      setPriorityGroup("");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    setCreating(false);
+  }
+
+  async function handleUpdate(id: string, patch: Partial<BoardItem>) {
+    setError(null);
+    const prev = items;
+    setItems((p) => p.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+    try {
+      const { item } = await api(`/${id}`, "PATCH", patch);
+      setItems((p) => p.map((it) => (it.id === id ? item : it)));
+    } catch (err) {
+      setError((err as Error).message);
+      setItems(prev);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setError(null);
+    const prev = items;
+    setItems((p) => p.filter((it) => it.id !== id));
+    try {
+      await api(`/${id}`, "DELETE");
+    } catch (err) {
+      setError((err as Error).message);
+      setItems(prev);
+    }
+  }
+
+  const sorted = [...items].sort(
+    (a, b) =>
+      PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+      +new Date(b.created_at) - +new Date(a.created_at),
+  );
+
+  return (
+    <div className="space-y-8">
+      {/* New item */}
+      <form
+        onSubmit={handleCreate}
+        className="rounded-card border border-cream-border bg-cream-surface p-4 shadow-subtle"
+      >
+        <div className="space-y-3">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="New item title…"
+            className={inputClass}
+          />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description (optional)"
+            rows={2}
+            className={inputClass}
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as ItemPriority)}
+              className="rounded-[10px] border border-cream-border bg-cream-surface px-2 py-2 text-sm text-cream-ink outline-none"
+            >
+              {ITEM_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p[0].toUpperCase() + p.slice(1)} priority
+                </option>
+              ))}
+            </select>
+            {showPriorityGroup && (
+              <input
+                value={priorityGroup}
+                onChange={(e) => setPriorityGroup(e.target.value)}
+                placeholder="Group (e.g. High Priority)"
+                className="flex-1 min-w-[12rem] rounded-[10px] border border-cream-border bg-cream-surface px-3 py-2 text-sm text-cream-ink outline-none transition focus:border-cream-accent-pressed"
+              />
+            )}
+            <button
+              type="submit"
+              disabled={creating || !title.trim()}
+              className="ml-auto rounded-md bg-cream-accent px-4 py-2 text-sm font-semibold text-cream-ink transition hover:bg-cream-accent-hover disabled:opacity-50"
+            >
+              {creating ? "Adding…" : "Add item"}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {error && (
+        <p className="rounded-md border border-cream-error/40 bg-cream-error/10 px-3 py-2 text-sm text-cream-error">
+          {error}
+        </p>
+      )}
+
+      {/* Grouped lists */}
+      {STATUS_ORDER.map((status) => {
+        const group = sorted.filter((it) => it.status === status);
+        return (
+          <section key={status}>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-cream-ink-tertiary">
+              {STATUS_LABEL[status]}{" "}
+              <span className="text-cream-ink-tertiary/70">
+                ({group.length})
+              </span>
+            </h2>
+            {group.length === 0 ? (
+              <p className="text-sm text-cream-ink-tertiary">Nothing here.</p>
+            ) : (
+              <ul className="space-y-2">
+                {group.map((item) => (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    showPriorityGroup={showPriorityGroup}
+                    onUpdate={handleUpdate}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function ItemRow({
+  item,
+  showPriorityGroup,
+  onUpdate,
+  onDelete,
+}: {
+  item: BoardItem;
+  showPriorityGroup: boolean;
+  onUpdate: (id: string, patch: Partial<BoardItem>) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(item.title);
+  const [description, setDescription] = useState(item.description ?? "");
+  const [priorityGroup, setPriorityGroup] = useState(
+    item.priority_group ?? "",
+  );
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  function save() {
+    if (!title.trim()) return;
+    const patch: Partial<BoardItem> = {
+      title: title.trim(),
+      description: description.trim() || null,
+    };
+    if (showPriorityGroup) {
+      patch.priority_group = priorityGroup.trim() || null;
+    }
+    onUpdate(item.id, patch);
+    setEditing(false);
+  }
+
+  function cancel() {
+    setTitle(item.title);
+    setDescription(item.description ?? "");
+    setPriorityGroup(item.priority_group ?? "");
+    setEditing(false);
+  }
+
+  return (
+    <li className="rounded-card border border-cream-border bg-cream-surface p-4 shadow-subtle">
+      {editing ? (
+        <div className="space-y-2">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className={inputClass}
+          />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder="Description (optional)"
+            className={inputClass}
+          />
+          {showPriorityGroup && (
+            <input
+              value={priorityGroup}
+              onChange={(e) => setPriorityGroup(e.target.value)}
+              placeholder="Group"
+              className={inputClass}
+            />
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={save}
+              className="rounded-md bg-cream-accent px-3 py-1.5 text-sm font-semibold text-cream-ink transition hover:bg-cream-accent-hover"
+            >
+              Save
+            </button>
+            <button
+              onClick={cancel}
+              className="rounded-md border border-cream-border px-3 py-1.5 text-sm text-cream-ink-secondary transition hover:bg-cream-bg-secondary"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-cream-ink">{item.title}</p>
+              {item.description && (
+                <p className="mt-1 whitespace-pre-wrap text-sm text-cream-ink-secondary">
+                  {item.description}
+                </p>
+              )}
+              {showPriorityGroup && item.priority_group && (
+                <p className="mt-1.5 text-xs text-cream-ink-tertiary">
+                  {item.priority_group}
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <PriorityBadge priority={item.priority} />
+              <StatusBadge status={item.status} />
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-cream-border pt-3">
+            <label className="text-xs text-cream-ink-tertiary">Status</label>
+            <select
+              value={item.status}
+              onChange={(e) =>
+                onUpdate(item.id, { status: e.target.value as ItemStatus })
+              }
+              className="rounded-md border border-cream-border bg-cream-surface px-2 py-1 text-xs text-cream-ink outline-none"
+            >
+              {ITEM_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+            <label className="ml-2 text-xs text-cream-ink-tertiary">
+              Priority
+            </label>
+            <select
+              value={item.priority}
+              onChange={(e) =>
+                onUpdate(item.id, {
+                  priority: e.target.value as ItemPriority,
+                })
+              }
+              className="rounded-md border border-cream-border bg-cream-surface px-2 py-1 text-xs text-cream-ink outline-none"
+            >
+              {ITEM_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p[0].toUpperCase() + p.slice(1)}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => setEditing(true)}
+              className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-cream-ink-secondary transition hover:bg-cream-bg-secondary"
+            >
+              Edit
+            </button>
+            {confirmDelete ? (
+              <span className="flex items-center gap-1">
+                <button
+                  onClick={() => onDelete(item.id)}
+                  className="rounded-md bg-cream-error px-2 py-1 text-xs font-medium text-white transition hover:opacity-90"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="rounded-md px-2 py-1 text-xs text-cream-ink-secondary transition hover:bg-cream-bg-secondary"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="rounded-md px-2 py-1 text-xs font-medium text-cream-error transition hover:bg-cream-error/10"
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </li>
+  );
+}

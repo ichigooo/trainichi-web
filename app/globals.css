@@ -3,9 +3,19 @@
 @tailwind utilities;
 
 :root {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
 
 body {
-  background-color: #020202;
+  background-color: #F0E9DA;
+  color: #2A1C12;
+}
+
+::selection {
+  background-color: #E8C34A;
+  color: #2A1C12;
+}
+
+html {
+  scroll-behavior: smooth;
 }
