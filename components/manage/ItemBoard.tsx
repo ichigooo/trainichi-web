@@ -41,6 +41,33 @@ const STATUS_LABEL: Record<ItemStatus, string> = {
   done: "Done",
 };
 
+type SortKey = "priority" | "updated" | "created" | "title";
+const SORT_LABEL: Record<SortKey, string> = {
+  priority: "Priority",
+  updated: "Recently updated",
+  created: "Recently added",
+  title: "Title A→Z",
+};
+const SORT_KEYS: SortKey[] = ["priority", "updated", "created", "title"];
+
+function sortItems(items: BoardItem[], sortKey: SortKey): BoardItem[] {
+  const copy = [...items];
+  switch (sortKey) {
+    case "priority":
+      return copy.sort(
+        (a, b) =>
+          PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+          +new Date(b.updated_at) - +new Date(a.updated_at),
+      );
+    case "updated":
+      return copy.sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at));
+    case "created":
+      return copy.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+    case "title":
+      return copy.sort((a, b) => a.title.localeCompare(b.title));
+  }
+}
+
 const inputClass =
   "w-full rounded-[10px] border border-cream-border bg-cream-surface px-3 py-2 text-sm text-cream-ink outline-none transition focus:border-cream-accent-pressed";
 
@@ -57,6 +84,8 @@ export function ItemBoard({
 }) {
   const [items, setItems] = useState<BoardItem[]>(initialItems);
   const [error, setError] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("priority");
+  const [groupByStatus, setGroupByStatus] = useState(true);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -134,11 +163,7 @@ export function ItemBoard({
     }
   }
 
-  const sorted = [...items].sort(
-    (a, b) =>
-      PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
-      +new Date(b.created_at) - +new Date(a.created_at),
-  );
+  const sorted = sortItems(items, sortKey);
 
   return (
     <div className="space-y-8">
@@ -214,35 +239,81 @@ export function ItemBoard({
         </p>
       )}
 
-      {STATUS_ORDER.map((status) => {
-        const group = sorted.filter((it) => it.status === status);
-        return (
-          <section key={status}>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-cream-ink-tertiary">
-              {STATUS_LABEL[status]}{" "}
-              <span className="text-cream-ink-tertiary/70">
-                ({group.length})
-              </span>
-            </h2>
-            {group.length === 0 ? (
-              <p className="text-sm text-cream-ink-tertiary">Nothing here.</p>
-            ) : (
-              <ul className="space-y-2">
-                {group.map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    showPriorityGroup={showPriorityGroup}
-                    showAppBadge={showAppBadge}
-                    onUpdate={handleUpdate}
-                    onDelete={handleDelete}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
-        );
-      })}
+      <div className="flex flex-wrap items-center gap-3 text-sm text-cream-ink-secondary">
+        <label className="flex items-center gap-2">
+          <span className="text-xs uppercase tracking-[0.12em] text-cream-ink-tertiary">
+            Sort by
+          </span>
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="rounded-md border border-cream-border bg-cream-surface px-2 py-1 text-sm text-cream-ink outline-none focus:border-cream-accent-pressed"
+          >
+            {SORT_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {SORT_LABEL[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={groupByStatus}
+            onChange={(e) => setGroupByStatus(e.target.checked)}
+            className="accent-cream-accent-pressed"
+          />
+          <span>Group by status</span>
+        </label>
+        <span className="ml-auto text-xs text-cream-ink-tertiary">
+          {sorted.length} item{sorted.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      {groupByStatus ? (
+        STATUS_ORDER.map((status) => {
+          const group = sorted.filter((it) => it.status === status);
+          return (
+            <section key={status}>
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-cream-ink-tertiary">
+                {STATUS_LABEL[status]}{" "}
+                <span className="text-cream-ink-tertiary/70">
+                  ({group.length})
+                </span>
+              </h2>
+              {group.length === 0 ? (
+                <p className="text-sm text-cream-ink-tertiary">Nothing here.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {group.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      showPriorityGroup={showPriorityGroup}
+                      showAppBadge={showAppBadge}
+                      onUpdate={handleUpdate}
+                      onDelete={handleDelete}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+          );
+        })
+      ) : (
+        <ul className="space-y-2">
+          {sorted.map((item) => (
+            <ItemRow
+              key={item.id}
+              item={item}
+              showPriorityGroup={showPriorityGroup}
+              showAppBadge={showAppBadge}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
