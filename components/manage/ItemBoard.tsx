@@ -58,7 +58,9 @@ const FEEDBACK_DATE_RE = /[—-]\s*(\d{4}-\d{2}-\d{2})\b/g;
 function latestFeedbackDate(description: string | null): number | null {
   if (!description) return null;
   let best = -Infinity;
-  for (const m of description.matchAll(FEEDBACK_DATE_RE)) {
+  const re = new RegExp(FEEDBACK_DATE_RE.source, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(description)) !== null) {
     const t = Date.parse(m[1]);
     if (!Number.isNaN(t) && t > best) best = t;
   }
