@@ -112,7 +112,7 @@ export function ItemBoard({
 }) {
   const [items, setItems] = useState<BoardItem[]>(initialItems);
   const [error, setError] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("priority");
+  const [sortKey, setSortKey] = useState<SortKey>("reported");
   const [groupByStatus, setGroupByStatus] = useState(true);
 
   const [title, setTitle] = useState("");

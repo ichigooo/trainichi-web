@@ -23,6 +23,12 @@ export type ParsedItem = {
   priority: ItemPriority;
   priority_group: string | null;
   position: number;
+  // True when the markdown explicitly carried this field (inline `**Status:** …`,
+  // emoji prefix in the header, or section heading). False when it's just the
+  // parser's fallback. Merge uses these to skip overwriting dashboard edits on
+  // UPDATE so pushes without explicit markers don't clobber user changes.
+  statusExplicit: boolean;
+  priorityExplicit: boolean;
 };
 
 const STATUS_EMOJI_TO_STATUS: Record<string, ItemStatus> = {
@@ -101,10 +107,10 @@ export function parseTrackerMarkdown(md: string): ParsedItem[] {
       ? detectPriorityFromText(inlinePriorityRaw)
       : null;
 
-    const status: ItemStatus =
-      inlineStatus ?? headerStatus ?? sectionStatus ?? "queued";
-    const priority: ItemPriority =
-      inlinePriority ?? sectionPriority ?? "medium";
+    const statusSignal = inlineStatus ?? headerStatus ?? sectionStatus;
+    const prioritySignal = inlinePriority ?? sectionPriority;
+    const status: ItemStatus = statusSignal ?? "queued";
+    const priority: ItemPriority = prioritySignal ?? "medium";
 
     items.push({
       key,
@@ -114,6 +120,8 @@ export function parseTrackerMarkdown(md: string): ParsedItem[] {
       priority,
       priority_group: sectionLabel,
       position: items.length,
+      statusExplicit: statusSignal !== null,
+      priorityExplicit: prioritySignal !== null,
     });
     pending = null;
   }

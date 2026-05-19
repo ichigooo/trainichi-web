@@ -55,30 +55,41 @@ export async function applyInboundTrackers(
       continue;
     }
 
-    const base: Record<string, unknown> = {
+    // Always-synced fields. Status/priority handling depends on whether the
+    // markdown carried an explicit marker — see below.
+    const titleBody: Record<string, unknown> = {
       app,
       title: item.title.slice(0, 300),
       description: item.description ? item.description.slice(0, 10000) : null,
-      status: item.status,
-      priority: item.priority,
       last_synced_at: now,
     };
     if (resource === "todos") {
-      base.priority_group = item.priority_group ?? null;
+      titleBody.priority_group = item.priority_group ?? null;
     }
 
     if (item.key && keyToId.has(item.key)) {
+      // UPDATE path: only overwrite status/priority when the markdown
+      // explicitly carried one. Otherwise dashboard edits to these fields
+      // would be wiped on every push.
       const id = keyToId.get(item.key)!;
-      const { error } = await supabase.from(resource).update(base).eq("id", id);
+      const patch: Record<string, unknown> = { ...titleBody };
+      if (item.statusExplicit) patch.status = item.status;
+      if (item.priorityExplicit) patch.priority = item.priority;
+      const { error } = await supabase.from(resource).update(patch).eq("id", id);
       if (error) throw new Error(error.message);
       updated++;
     } else {
-      // Generate a stable key when MD didn't carry one; the next outbound
-      // writes it back into the file.
+      // INSERT path: seed status/priority with whatever the parser produced
+      // (explicit or default) so new rows always have a value.
       const external_key = item.key ?? crypto.randomUUID();
       const { error } = await supabase
         .from(resource)
-        .insert({ ...base, external_key });
+        .insert({
+          ...titleBody,
+          status: item.status,
+          priority: item.priority,
+          external_key,
+        });
       if (error) throw new Error(error.message);
       inserted++;
     }
