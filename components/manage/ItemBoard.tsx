@@ -2,16 +2,21 @@
 
 import { useState } from "react";
 import {
+  APPS,
+  APP_LABELS,
   ITEM_PRIORITIES,
   ITEM_STATUSES,
+  type AppSlug,
   type ItemPriority,
   type ItemStatus,
 } from "@/lib/constants";
 import { StatusBadge } from "./StatusBadge";
 import { PriorityBadge } from "./PriorityBadge";
+import type { AppFilter } from "@/lib/appFilter";
 
 export type BoardItem = {
   id: string;
+  app: AppSlug;
   title: string;
   description: string | null;
   status: ItemStatus;
@@ -40,10 +45,12 @@ export function ItemBoard({
   resource,
   initialItems,
   showPriorityGroup,
+  app,
 }: {
   resource: "improvements" | "todos";
   initialItems: BoardItem[];
   showPriorityGroup: boolean;
+  app: AppFilter;
 }) {
   const [items, setItems] = useState<BoardItem[]>(initialItems);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +59,13 @@ export function ItemBoard({
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<ItemPriority>("medium");
   const [priorityGroup, setPriorityGroup] = useState("");
+  // When viewing "All", the create form must explicitly pick an app.
+  const [createApp, setCreateApp] = useState<AppSlug>(
+    app === "all" ? "workout" : app,
+  );
   const [creating, setCreating] = useState(false);
+
+  const showAppBadge = app === "all";
 
   async function api(path: string, method: string, body?: unknown) {
     const res = await fetch(`/api/admin/${resource}${path}`, {
@@ -71,7 +84,9 @@ export function ItemBoard({
     setCreating(true);
     setError(null);
     try {
+      const targetApp: AppSlug = app === "all" ? createApp : app;
       const payload: Record<string, unknown> = {
+        app: targetApp,
         title: title.trim(),
         description: description.trim() || null,
         priority,
@@ -124,7 +139,6 @@ export function ItemBoard({
 
   return (
     <div className="space-y-8">
-      {/* New item */}
       <form
         onSubmit={handleCreate}
         className="rounded-card border border-cream-border bg-cream-surface p-4 shadow-subtle"
@@ -133,7 +147,11 @@ export function ItemBoard({
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="New item title…"
+            placeholder={
+              app === "all"
+                ? "New item title…"
+                : `New ${APP_LABELS[app]} item title…`
+            }
             className={inputClass}
           />
           <textarea
@@ -144,6 +162,19 @@ export function ItemBoard({
             className={inputClass}
           />
           <div className="flex flex-wrap items-center gap-3">
+            {app === "all" && (
+              <select
+                value={createApp}
+                onChange={(e) => setCreateApp(e.target.value as AppSlug)}
+                className="rounded-[10px] border border-cream-border bg-cream-surface px-2 py-2 text-sm text-cream-ink outline-none"
+              >
+                {APPS.map((slug) => (
+                  <option key={slug} value={slug}>
+                    {APP_LABELS[slug]}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as ItemPriority)}
@@ -180,7 +211,6 @@ export function ItemBoard({
         </p>
       )}
 
-      {/* Grouped lists */}
       {STATUS_ORDER.map((status) => {
         const group = sorted.filter((it) => it.status === status);
         return (
@@ -200,6 +230,7 @@ export function ItemBoard({
                     key={item.id}
                     item={item}
                     showPriorityGroup={showPriorityGroup}
+                    showAppBadge={showAppBadge}
                     onUpdate={handleUpdate}
                     onDelete={handleDelete}
                   />
@@ -216,11 +247,13 @@ export function ItemBoard({
 function ItemRow({
   item,
   showPriorityGroup,
+  showAppBadge,
   onUpdate,
   onDelete,
 }: {
   item: BoardItem;
   showPriorityGroup: boolean;
+  showAppBadge: boolean;
   onUpdate: (id: string, patch: Partial<BoardItem>) => void;
   onDelete: (id: string) => void;
 }) {
@@ -308,6 +341,11 @@ function ItemRow({
               )}
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1.5">
+              {showAppBadge && (
+                <span className="inline-flex items-center rounded-full bg-cream-bg-secondary px-2.5 py-0.5 text-xs font-medium text-cream-ink-secondary">
+                  {APP_LABELS[item.app]}
+                </span>
+              )}
               <PriorityBadge priority={item.priority} />
               <StatusBadge status={item.status} />
             </div>

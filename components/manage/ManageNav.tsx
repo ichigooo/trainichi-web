@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const LINKS = [
   { href: "/manage/improvements", label: "Improvements" },
@@ -12,6 +12,9 @@ const LINKS = [
 export function ManageNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const params = useSearchParams();
+  const appQs = params.get("app");
+  const suffix = appQs ? `?app=${appQs}` : "";
 
   async function handleLogout() {
     await fetch("/api/admin/logout", { method: "POST" });
@@ -32,7 +35,7 @@ export function ManageNav() {
               return (
                 <Link
                   key={link.href}
-                  href={link.href}
+                  href={`${link.href}${suffix}`}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
                     active
                       ? "bg-cream-accent text-cream-ink"

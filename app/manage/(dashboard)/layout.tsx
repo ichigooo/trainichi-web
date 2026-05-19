@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+// ManageNav uses useSearchParams (to preserve ?app= across section tabs).
+// Force the whole dashboard dynamic so Next doesn't try to prerender it.
+export const dynamic = "force-dynamic";
+
 export default function DashboardLayout({
   children,
 }: {

@@ -7,6 +7,8 @@ const PUBLIC_PATHS = new Set([
   "/manage/login",
   "/api/admin/login",
   "/api/admin/logout",
+  // Bearer-auth (MANAGE_SYNC_TOKEN), not cookie — invoked by GitHub Actions.
+  "/api/admin/sync/inbound",
 ]);
 
 export async function middleware(request: NextRequest) {

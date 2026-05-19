@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { isAdminRequest, unauthorized } from "@/lib/adminGuard";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
-import { ITEM_PRIORITIES, ITEM_STATUSES } from "@/lib/constants";
+import {
+  ITEM_PRIORITIES,
+  ITEM_STATUSES,
+  isAppSlug,
+  type AppSlug,
+} from "@/lib/constants";
 
 // Shared CRUD logic for the `improvements` and `todos` tables — they share a
 // schema except `todos` also has a free-text `priority_group`.
@@ -9,6 +14,7 @@ import { ITEM_PRIORITIES, ITEM_STATUSES } from "@/lib/constants";
 export type ItemResource = "improvements" | "todos";
 
 type ParsedItem = {
+  app?: AppSlug;
   title?: string;
   description?: string | null;
   status?: string;
@@ -16,7 +22,6 @@ type ParsedItem = {
   priority_group?: string | null;
 };
 
-/** Whitelist + validate a request body for create/update. */
 function parseItemBody(
   body: unknown,
   resource: ItemResource,
@@ -27,6 +32,13 @@ function parseItemBody(
   }
   const b = body as Record<string, unknown>;
   const data: ParsedItem = {};
+
+  if (b.app !== undefined) {
+    if (!isAppSlug(b.app)) return { error: "Invalid app" };
+    data.app = b.app;
+  } else if (requireTitle) {
+    return { error: "app is required" };
+  }
 
   if (b.title !== undefined) {
     if (typeof b.title !== "string" || b.title.trim().length === 0) {
@@ -78,12 +90,21 @@ function parseItemBody(
 
 /** GET (list) + POST (create) handlers for /api/admin/{resource}. */
 export function makeItemCollectionRoute(resource: ItemResource) {
-  async function GET() {
+  async function GET(request: Request) {
     if (!(await isAdminRequest())) return unauthorized();
-    const { data, error } = await getSupabaseAdmin()
+    const url = new URL(request.url);
+    const appParam = url.searchParams.get("app");
+    let query = getSupabaseAdmin()
       .from(resource)
       .select("*")
       .order("created_at", { ascending: false });
+    if (appParam && appParam !== "all") {
+      if (!isAppSlug(appParam)) {
+        return NextResponse.json({ error: "Invalid app" }, { status: 400 });
+      }
+      query = query.eq("app", appParam);
+    }
+    const { data, error } = await query;
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
