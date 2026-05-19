@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { ItemBoard } from "@/components/manage/ItemBoard";
 import { AppTabs } from "@/components/manage/AppTabs";
@@ -6,12 +7,14 @@ import { PushToRepoButton } from "@/components/manage/PushToRepoButton";
 import type { Improvement } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export default async function ImprovementsPage({
   searchParams,
 }: {
   searchParams: { app?: string };
 }) {
+  noStore();
   const app = readAppFilter(searchParams.app);
   let query = getSupabaseAdmin()
     .from("improvements")
