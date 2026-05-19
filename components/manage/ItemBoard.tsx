@@ -41,14 +41,29 @@ const STATUS_LABEL: Record<ItemStatus, string> = {
   done: "Done",
 };
 
-type SortKey = "priority" | "updated" | "created" | "title";
+type SortKey = "priority" | "reported" | "updated" | "created" | "title";
 const SORT_LABEL: Record<SortKey, string> = {
   priority: "Priority",
+  reported: "TF feedback (newest)",
   updated: "Recently updated",
   created: "Recently added",
   title: "Title A→Z",
 };
-const SORT_KEYS: SortKey[] = ["priority", "updated", "created", "title"];
+const SORT_KEYS: SortKey[] = ["priority", "reported", "updated", "created", "title"];
+
+// Pulls the latest `— YYYY-MM-DD` (or `- YYYY-MM-DD`) date out of the description.
+// Used to sort by when a TestFlight tester reported the underlying feedback,
+// which is embedded inline in blockquotes when items come from the ASC sync.
+const FEEDBACK_DATE_RE = /[—-]\s*(\d{4}-\d{2}-\d{2})\b/g;
+function latestFeedbackDate(description: string | null): number | null {
+  if (!description) return null;
+  let best = -Infinity;
+  for (const m of description.matchAll(FEEDBACK_DATE_RE)) {
+    const t = Date.parse(m[1]);
+    if (!Number.isNaN(t) && t > best) best = t;
+  }
+  return best === -Infinity ? null : best;
+}
 
 function sortItems(items: BoardItem[], sortKey: SortKey): BoardItem[] {
   const copy = [...items];
@@ -59,6 +74,17 @@ function sortItems(items: BoardItem[], sortKey: SortKey): BoardItem[] {
           PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
           +new Date(b.updated_at) - +new Date(a.updated_at),
       );
+    case "reported":
+      return copy.sort((a, b) => {
+        const da = latestFeedbackDate(a.description);
+        const db = latestFeedbackDate(b.description);
+        // Items with a parseable feedback date come first (newest), then items
+        // without a date fall back to created_at desc.
+        if (da !== null && db !== null) return db - da;
+        if (da !== null) return -1;
+        if (db !== null) return 1;
+        return +new Date(b.created_at) - +new Date(a.created_at);
+      });
     case "updated":
       return copy.sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at));
     case "created":
