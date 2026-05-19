@@ -19,3 +19,35 @@ body {
 html {
   scroll-behavior: smooth;
 }
+
+.manage-md {
+  white-space: normal;
+}
+.manage-md p {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+.manage-md blockquote {
+  border-left: 2px solid #d4d0c8;
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  color: #807a6f;
+  font-style: italic;
+}
+.manage-md code {
+  background: #ede9df;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+.manage-md img {
+  max-width: 280px;
+  height: auto;
+  border-radius: 8px;
+  margin: 0.5rem 0.5rem 0.25rem 0;
+  display: inline-block;
+  vertical-align: top;
+}
+.manage-md strong {
+  color: #1a1814;
+}

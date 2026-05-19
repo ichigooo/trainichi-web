@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import {
   APPS,
   APP_LABELS,
@@ -330,9 +333,11 @@ function ItemRow({
             <div className="min-w-0">
               <p className="font-medium text-cream-ink">{item.title}</p>
               {item.description && (
-                <p className="mt-1 whitespace-pre-wrap text-sm text-cream-ink-secondary">
-                  {item.description}
-                </p>
+                <div className="manage-md mt-1 text-sm text-cream-ink-secondary">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                    {item.description}
+                  </ReactMarkdown>
+                </div>
               )}
               {showPriorityGroup && item.priority_group && (
                 <p className="mt-1.5 text-xs text-cream-ink-tertiary">
