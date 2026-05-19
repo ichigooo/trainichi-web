@@ -8,9 +8,6 @@ import type { AppSlug, FeedbackSource } from "@/lib/constants";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365; // 1 year
 const SCREENSHOT_BUCKET = "feedback-screenshots";
-// Look at the N most recent builds. Beta feedback is per-build; older builds
-// rarely receive new feedback so this is plenty.
-const BUILD_FETCH_LIMIT = 10;
 
 type AscResource<TAttrs, TRels = Record<string, never>> = {
   id: string;
@@ -23,6 +20,8 @@ type Build = AscResource<{
   version: string;
   uploadedDate: string;
 }>;
+
+type FeedbackRels = { build?: { data?: { id: string } } };
 
 type ScreenshotAsset = { fileName: string; url: string };
 type ScreenshotAttrs = {
@@ -46,7 +45,7 @@ type CrashAttrs = {
   crashLog?: { url: string; fileName?: string };
 };
 
-type AscList<T> = { data: T[]; links?: { next?: string } };
+type AscList<T> = { data: T[]; included?: Build[]; links?: { next?: string } };
 
 export type PullResult = {
   inserted: number;
@@ -54,39 +53,68 @@ export type PullResult = {
   buildsScanned: number;
 };
 
+// Apple exposes beta feedback under the app-scoped endpoint. The build-scoped
+// variant (/v1/builds/{id}/betaFeedbackScreenshotSubmissions) returns empty
+// for some apps even when feedback exists — observed on splittr 2026-05-19.
+async function fetchAppFeedback<T>(
+  appId: string,
+  kind: "betaFeedbackScreenshotSubmissions" | "betaFeedbackCrashSubmissions",
+): Promise<{ items: AscResource<T, FeedbackRels>[]; buildsById: Map<string, Build> }> {
+  const res = await asc<AscList<AscResource<T, FeedbackRels>>>(
+    `/v1/apps/${appId}/${kind}?limit=200&include=build&fields[builds]=version,uploadedDate`,
+  ).catch(() => ({ data: [], included: [] as Build[] }));
+  const buildsById = new Map<string, Build>();
+  for (const b of res.included ?? []) buildsById.set(b.id, b);
+  return { items: res.data, buildsById };
+}
+
+function resolveBuild(
+  item: AscResource<unknown, FeedbackRels>,
+  buildsById: Map<string, Build>,
+): Build {
+  const id = item.relationships?.build?.data?.id;
+  const found = id ? buildsById.get(id) : undefined;
+  return (
+    found ?? {
+      id: id ?? "",
+      type: "builds",
+      attributes: { version: "?", uploadedDate: "" },
+    }
+  );
+}
+
 /** Pull beta feedback for one app and upsert into the feedback table. */
 export async function pullFeedbackForApp(app: AppSlug): Promise<PullResult> {
   const appId = getAscAppId(app);
-  const builds = await asc<AscList<Build>>(
-    `/v1/apps/${appId}/builds?limit=${BUILD_FETCH_LIMIT}&sort=-uploadedDate&fields[builds]=version,uploadedDate`,
-  );
 
   let inserted = 0;
   let updated = 0;
 
-  for (const build of builds.data) {
-    const screenshots = await asc<AscList<AscResource<ScreenshotAttrs>>>(
-      `/v1/builds/${build.id}/betaFeedbackScreenshotSubmissions?limit=200`,
-    ).catch(() => ({ data: [] }));
-
-    for (const s of screenshots.data) {
-      const r = await upsertScreenshot(app, build, s);
-      if (r === "inserted") inserted++;
-      else if (r === "updated") updated++;
-    }
-
-    const crashes = await asc<AscList<AscResource<CrashAttrs>>>(
-      `/v1/builds/${build.id}/betaFeedbackCrashSubmissions?limit=200`,
-    ).catch(() => ({ data: [] }));
-
-    for (const c of crashes.data) {
-      const r = await upsertCrash(app, build, c);
-      if (r === "inserted") inserted++;
-      else if (r === "updated") updated++;
-    }
+  const screenshots = await fetchAppFeedback<ScreenshotAttrs>(
+    appId,
+    "betaFeedbackScreenshotSubmissions",
+  );
+  for (const s of screenshots.items) {
+    const r = await upsertScreenshot(app, resolveBuild(s, screenshots.buildsById), s);
+    if (r === "inserted") inserted++;
+    else if (r === "updated") updated++;
   }
 
-  return { inserted, updated, buildsScanned: builds.data.length };
+  const crashes = await fetchAppFeedback<CrashAttrs>(
+    appId,
+    "betaFeedbackCrashSubmissions",
+  );
+  for (const c of crashes.items) {
+    const r = await upsertCrash(app, resolveBuild(c, crashes.buildsById), c);
+    if (r === "inserted") inserted++;
+    else if (r === "updated") updated++;
+  }
+
+  return {
+    inserted,
+    updated,
+    buildsScanned: screenshots.buildsById.size + crashes.buildsById.size,
+  };
 }
 
 type UpsertOutcome = "inserted" | "updated" | "noop";
@@ -94,7 +122,7 @@ type UpsertOutcome = "inserted" | "updated" | "noop";
 async function upsertScreenshot(
   app: AppSlug,
   build: Build,
-  s: AscResource<ScreenshotAttrs>,
+  s: AscResource<ScreenshotAttrs, FeedbackRels>,
 ): Promise<UpsertOutcome> {
   const supabase = getSupabaseAdmin();
   const source: FeedbackSource = "testflight_screenshot";
@@ -151,7 +179,7 @@ async function upsertScreenshot(
 async function upsertCrash(
   app: AppSlug,
   build: Build,
-  c: AscResource<CrashAttrs>,
+  c: AscResource<CrashAttrs, FeedbackRels>,
 ): Promise<UpsertOutcome> {
   const supabase = getSupabaseAdmin();
   const source: FeedbackSource = "testflight_crash";
